@@ -1,7 +1,8 @@
 (ns clj-robots-parser.core
   (:require [instaparse.core :as insta]
             [lambdaisland.uri :as uri]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            #?(:cljs [goog.string :a gstring])))
 
 
 ;; Adapted from https://developers.google.com/search/reference/robots_txt.
@@ -130,12 +131,33 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
                     (filter some?))
         {:keys [group sitemap]} (categorize-lines parsed)]
     {:sitemap-urls (into [] (map second sitemap))
-     ;; TODO wildcards -> regex
      :agent-rules (by-user-agent group)}))
+
+(defn- re-quote
+  [s]
+  #?(:clj  (java.util.regex.Pattern/quote s)
+     :cljs (gstring/regExpEscape s)))
+
+(defn- regexify
+  "Turns strings that may contain robots.txt-style wildcards (*, $) into
+  regexes."
+  [path]
+  (let [end-anchor (if (str/ends-with? path "$") "$" "")
+        p (if (empty? end-anchor)
+            path
+            (subs path 0 (- (count path) 1)))]
+    (as-> p p
+      (str/split p #"\*+")
+      (map re-quote p)
+      (str/join ".*" p)
+      (str p end-anchor)
+      (re-pattern p))))
+
+(def regex-memo (memoize regexify))
 
 (defn- rule-verdict
   [[rule rule-path] test-path]
-  (if (str/starts-with? test-path rule-path)
+  (if (re-find (regex-memo rule-path) test-path)
     ;; return the type of the rule - :allow or :disallow
     rule
     ;; we have nothing to say
@@ -146,11 +168,16 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
   parsed robots.txt?"
   [url user-agent {:keys [agent-rules]}]
   (let [path (:path (uri/parse url))
-        user-agent (str/lower-case)
-        rules (->> agent-rules
-                   (filter #(str/includes? user-agent (key %)))
-                   (first)
-                   (val))]
+        user-agent (str/lower-case user-agent)
+        rules (or (some->> agent-rules
+                           (filter #(str/includes? user-agent (key %)))
+                           (first)
+                           (val))
+                  (some->> agent-rules
+                           (filter #(= "*" (key %)))
+                           (first)
+                           (val))
+                  ([:allow "/"]))]
     (case (some #(rule-verdict % path) rules)
       :allow true
       :disallow false

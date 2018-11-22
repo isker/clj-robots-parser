@@ -2,7 +2,7 @@
   (:require [instaparse.core :as insta]
             [lambdaisland.uri :as uri]
             [clojure.string :as str]
-            #?(:cljs [goog.string :a gstring])))
+            #?(:cljs [goog.string :as gstring])))
 
 
 ;; Adapted from https://developers.google.com/search/reference/robots_txt.

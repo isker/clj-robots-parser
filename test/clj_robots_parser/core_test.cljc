@@ -1,6 +1,7 @@
 (ns clj-robots-parser.core-test
-  (:require [clojure.test :refer :all]
-            [clj-robots-parser.core :refer :all]))
+  (:require #?(:clj [clojure.test :refer [deftest is testing are]]
+               :cljs [cljs.test :refer-macros [deftest is testing are]])
+            [clj-robots-parser.core :refer [parse is-crawlable?]]))
 
 (def robots-simple "
   sitemap: https://example.com/sitemap1

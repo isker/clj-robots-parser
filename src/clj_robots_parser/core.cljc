@@ -151,7 +151,7 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
       (str/split p #"\*+")
       (map re-quote p)
       (str/join ".*" p)
-      (str p end-anchor)
+      (str "^" p end-anchor)
       (re-pattern p))))
 
 (def regex-memo (memoize regexify))

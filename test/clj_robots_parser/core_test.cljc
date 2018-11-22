@@ -47,6 +47,7 @@
   (let [results (parse multiple-user-agents)]
     (are [expect args] (= expect (is-crawlable? (:url args) (:ua args) results))
       true  {:url "/Foobar" :ua "Googlebot 1.0"}
+      true  {:url "/Foobar/secret-lair" :ua "Googlebot 1.0"}
       true  {:url "https://www.example.com/Foobar" :ua "googlebot 1.0"}
       true  {:url "/" :ua "Googlebot 1.0"}
       false {:url "/secret-lair" :ua "big boss baws"}

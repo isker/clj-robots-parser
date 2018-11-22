@@ -1,7 +1,8 @@
 (ns clj-robots-parser.core
-  (:require [instaparse.core :as insta]
+  (:require [clojure.string :as str]
             [lambdaisland.uri :as uri]
-            [clojure.string :as str]
+            #?(:clj [instaparse.core :as insta :refer [defparser]]
+               :cljs [instaparse.core :as insta :refer-macros [defparser]])
             #?(:cljs [goog.string :as gstring])))
 
 
@@ -13,7 +14,7 @@
 ;;   document into lines before using this grammar.
 ;; * This is substantially less stringent on the URL format as I'm not
 ;;   going to bother inlining multiple RFCs here.
-(insta/defparser robots-txt-line
+(defparser robots-txt-line
 
   "
 robotsline = useragent | allow | disallow | sitemap | otherline | comment

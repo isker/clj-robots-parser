@@ -25,7 +25,7 @@
   user-agent: msn
   user-agent: big boss
   allow: /
-  disallow: /secret-lair
+  disallow: /secret-lair?cat=etcpwd
   ")
 
 (deftest test-parse
@@ -35,10 +35,10 @@
       (is (= {"*" #{[:disallow "/Foobar"] [:allow "/Foo"]}} (:agent-rules results)))))
   (testing "ordering of user agents and directives by length"
     (let [{:keys [agent-rules]} (parse multiple-user-agents)]
-      (is (= {"googlebot" #{[:disallow "/secret-lair"] [:allow "/"]}
-              "big boss"  #{[:disallow "/secret-lair"] [:allow "/"]}
+      (is (= {"googlebot" #{[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]}
+              "big boss"  #{[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]}
               "google"    #{[:disallow "/"]}
-              "msn"       #{[:disallow "/secret-lair"] [:allow "/"]}
+              "msn"       #{[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]}
               "*"         #{[:disallow "/"]}}
 
              agent-rules)))))
@@ -47,11 +47,12 @@
   (let [results (parse multiple-user-agents)]
     (are [expect args] (= expect (is-crawlable? (:url args) (:ua args) results))
       true  {:url "/Foobar" :ua "Googlebot 1.0"}
-      true  {:url "/Foobar/secret-lair" :ua "Googlebot 1.0"}
+      true  {:url "/Foobar/secret-lair?cat=etcpwd" :ua "Googlebot 1.0"}
       true  {:url "https://www.example.com/Foobar" :ua "googlebot 1.0"}
       true  {:url "/" :ua "Googlebot 1.0"}
-      false {:url "/secret-lair" :ua "big boss baws"}
-      false {:url "/secret-lair" :ua "msnbawt"}
+      false {:url "/secret-lair?cat=etcpwd#yes" :ua "big boss baws"}
+      false {:url "/secret-lair?cat=etcpwd" :ua "msnbawt"}
+      true  {:url "/secret-lair" :ua "msnbawt"}
       false {:url "/Foobar" :ua "google salt bae"}
       false {:url "/Foobar" :ua "anything"}
       false {:url "/whatever" :ua "anything"})))

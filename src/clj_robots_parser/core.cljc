@@ -154,7 +154,7 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
       (str "^" p end-anchor)
       (re-pattern p))))
 
-(def regex-memo (memoize regexify))
+(def ^:private regex-memo (memoize regexify))
 
 (defn- rule-verdict
   [[rule rule-path] test-path]
@@ -168,17 +168,23 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
   "Is the given user-agent allowed to access the given URL by the given
   parsed robots.txt?"
   [url user-agent {:keys [agent-rules]}]
-  (let [path (:path (uri/parse url))
+  (let [path (str (assoc (uri/parse url)
+                         ;; Drop anything in the URI before the path.  We do it
+                         ;; this way to take advantage of toString on uri/URI.
+                         :scheme nil
+                         :user nil
+                         :passwod nil
+                         :host nil
+                         :port nil))
         user-agent (str/lower-case user-agent)
         rules (or (some->> agent-rules
                            (filter #(str/includes? user-agent (key %)))
                            (first)
                            (val))
-                  (some->> agent-rules
-                           (filter #(= "*" (key %)))
-                           (first)
-                           (val))
-                  ([:allow "/"]))]
+                  ;; Special case: wildcard user agent. Only this exact string
+                  ;; is a valid wildcard - UA wildcards are not as general as
+                  ;; wildcards in allow/disallow paths.
+                  (get agent-rules "*"))]
     (case (some #(rule-verdict % path) rules)
       :allow true
       :disallow false

@@ -63,17 +63,25 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
        (map second)
        (group-by categorize-line)))
 
-(defn- comparator-by
-  [f]
-  (fn [k1 k2]
-    (compare (f k1) (f k2))))
+(defn- longest-strings-first
+  "Extracts strings with given function.  Sorts strings by length,
+  longest coming first.  Breaks ties with regular string comparison."
+  ([s1 s2]
+   (compare [(count s2) s1]
+            [(count s1) s2]))
+  ([f]
+   (fn [x y]
+     (let [s1 (f x)
+           s2 (f y)]
+       (compare [(count s2) s1]
+                [(count s1) s2])))))
 
 (defn- update-group-map
   [directives d]
   (if directives
     (conj directives d)
     ;; Longest directive paths first
-    (sorted-set-by (comparator-by #(- (count (second %)))) d)))
+    (sorted-set-by (longest-strings-first second) d)))
 
 (defn- by-user-agent
   "Transforms a seq of 'group' lines into a map of user-agent ->
@@ -93,7 +101,7 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
          encountering-agents false
          current-agents #{}
          ;; Longest UAs first
-         result (sorted-map-by (comparator-by #(- (count %))))]
+         result (sorted-map-by longest-strings-first)]
     (let [line (first lines)
           [type _] line]
       (cond

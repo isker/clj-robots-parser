@@ -9,6 +9,7 @@
   user-Agent: *# how bout that we can comment here yee haw
   some garbo line that should be ignored
   alloW: /Foo
+  Allow: /bar
   disallow: /Foobar
   sitemap: https://example.com/sitemap2\r
   disAllow: not a path
@@ -23,7 +24,7 @@
 
   user-agent: GOOGLEbot
   user-agent: msn
-  user-agent: big boss
+  user-agent: big
   allow: /
   disallow: /secret-lair?cat=etcpwd
   ")
@@ -32,12 +33,12 @@
   (testing "simple data extraction"
     (let [results (parse robots-simple)]
       (is (= ["https://example.com/sitemap1" "https://example.com/sitemap2"] (:sitemap-urls results)))
-      (is (= {"*" #{[:disallow "/Foobar"] [:allow "/Foo"]}} (:agent-rules results)))))
+      (is (= {"*" #{[:disallow "/Foobar"] [:allow "/Foo"] [:allow "/bar"]}} (:agent-rules results)))))
   (testing "ordering of user agents and directives by length"
     (let [{:keys [agent-rules]} (parse multiple-user-agents)]
       (is (= {"googlebot" #{[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]}
-              "big boss"  #{[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]}
               "google"    #{[:disallow "/"]}
+              "big"       #{[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]}
               "msn"       #{[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]}
               "*"         #{[:disallow "/"]}}
 

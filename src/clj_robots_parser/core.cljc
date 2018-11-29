@@ -173,9 +173,9 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
     nil))
 
 (defn is-crawlable?
-  "Is the given user-agent allowed to access the given URL by the given
-  parsed robots.txt?"
-  [url user-agent {:keys [agent-rules]}]
+  "Does the given parsed robots.txt permit the given URL to be crawled
+  by the given user-agent?"
+  [{:keys [agent-rules]} url user-agent]
   (let [path (str (assoc (uri/parse url)
                          ;; Drop anything in the URI before the path.  We do it
                          ;; this way to take advantage of toString on uri/URI.

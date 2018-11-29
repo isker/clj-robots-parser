@@ -46,7 +46,7 @@
 
 (deftest test-query
   (let [results (parse multiple-user-agents)]
-    (are [expect args] (= expect (is-crawlable? (:url args) (:ua args) results))
+    (are [expect args] (= expect (is-crawlable? results (:url args) (:ua args)))
       true  {:url "/Foobar" :ua "Googlebot 1.0"}
       true  {:url "/Foobar/secret-lair?cat=etcpwd" :ua "Googlebot 1.0"}
       true  {:url "https://www.example.com/Foobar" :ua "googlebot 1.0"}

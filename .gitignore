@@ -2,3 +2,4 @@
 /.lein-*
 /.nrepl-port
 pom.xml
+pom.xml.asc

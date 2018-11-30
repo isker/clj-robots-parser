@@ -54,6 +54,7 @@
       false {:url "/secret-lair?cat=etcpwd#yes" :ua "big boss baws"}
       false {:url "/secret-lair?cat=etcpwd" :ua "msnbawt"}
       true  {:url "/secret-lair" :ua "msnbawt"}
+      false {:url "https://user:password@www.example.com:8080/Foobar?bar=baa#baz" :ua "google salt bae"}
       false {:url "/Foobar" :ua "google salt bae"}
       false {:url "/Foobar" :ua "anything"}
       false {:url "/whatever" :ua "anything"})))

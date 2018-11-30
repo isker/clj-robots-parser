@@ -73,8 +73,7 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
    (fn [x y]
      (let [s1 (f x)
            s2 (f y)]
-       (compare [(count s2) s1]
-                [(count s1) s2])))))
+       (longest-strings-first s1 s2)))))
 
 (defn- update-group-map
   [directives d]
@@ -181,7 +180,7 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
                          ;; this way to take advantage of toString on uri/URI.
                          :scheme nil
                          :user nil
-                         :passwod nil
+                         :password nil
                          :host nil
                          :port nil))
         user-agent (str/lower-case user-agent)

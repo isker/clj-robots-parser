@@ -10,6 +10,7 @@
   some garbo line that should be ignored
   alloW: /Foo
   Allow: /bar
+
   disallow: /Foobar
   sitemap: https://example.com/sitemap2\r
   disAllow: not a path
@@ -29,20 +30,27 @@
   disallow: /secret-lair?cat=etcpwd
   ")
 
+(defn extract-groups
+  [results]
+  (into (array-map)
+        (map (fn [[k v]]
+               [k (map (fn [d]
+                         [(:type d) (:value d)]) (:directives v))]) (:agent-groups results))))
+
 (deftest test-parse
   (testing "simple data extraction"
     (let [results (parse robots-simple)]
-      (is (= ["https://example.com/sitemap1" "https://example.com/sitemap2"] (:sitemap-urls results)))
-      (is (= {"*" #{[:disallow "/Foobar"] [:allow "/Foo"] [:allow "/bar"]}} (:agent-rules results)))))
+      (is (= ["https://example.com/sitemap1" "https://example.com/sitemap2"] (map :value (:sitemap-urls results))))
+      (is (= {"*" [[:disallow "/Foobar"] [:allow "/Foo"] [:allow "/bar"]]} (extract-groups results)))))
   (testing "ordering of user agents and directives by length"
-    (let [{:keys [agent-rules]} (parse multiple-user-agents)]
-      (is (= {"googlebot" #{[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]}
-              "google"    #{[:disallow "/"]}
-              "big"       #{[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]}
-              "msn"       #{[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]}
-              "*"         #{[:disallow "/"]}}
+    (let [agent-groups (extract-groups (parse multiple-user-agents))]
+      (is (= {"googlebot" [[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]]
+              "google"    [[:disallow "/"]]
+              "big"       [[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]]
+              "msn"       [[:disallow "/secret-lair?cat=etcpwd"] [:allow "/"]]
+              "*"         [[:disallow "/"]]}
 
-             agent-rules)))))
+             agent-groups)))))
 
 (deftest test-query
   (let [results (parse multiple-user-agents)]

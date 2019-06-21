@@ -42,15 +42,18 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
 (defn- parse-line
   "Parses the given line, returning nil if it is not valid according to
   the grammar."
-  [line-string]
-  (let [result (robots-txt-line line-string)]
-    (if (insta/failure? result)
-      nil
-      (insta/transform {:pathvalue str :agentvalue (comp str/trim str/lower-case)} result))))
+  [line-number line]
+  (let [result (robots-txt-line line)]
+    (when-not (insta/failure? result)
+      (with-meta
+        (insta/transform {:robotsline identity ; strips the :robotsline key
+                          :pathvalue str
+                          :agentvalue (comp str/trim str/lower-case)} result)
+        {:line-number line-number}))))
 
 (defn- categorize-line
   [parsed-line]
-  (case (first parsed-line)
+  (case (:type parsed-line)
     :useragent :group
     :allow     :group
     :disallow  :group
@@ -59,9 +62,7 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
 
 (defn- categorize-lines
   [parsed-lines]
-  (->> parsed-lines
-       (map second)
-       (group-by categorize-line)))
+  (group-by categorize-line parsed-lines))
 
 (defn- longest-strings-first
   "Extracts strings with given function.  Sorts strings by length,
@@ -75,12 +76,13 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
            s2 (f y)]
        (longest-strings-first s1 s2)))))
 
-(defn- update-group-map
-  [directives d]
-  (if directives
-    (conj directives d)
-    ;; Longest directive paths first
-    (sorted-set-by (longest-strings-first second) d)))
+(defn- update-agent-value
+  [agent-value directive agent-line-number]
+  (if agent-value
+    (update-in agent-value [:directives] conj directive)
+    {:line-number agent-line-number
+     ;; Longest directive paths first
+     :directives (sorted-set-by (longest-strings-first :value) directive)}))
 
 (defn- by-user-agent
   "Transforms a seq of 'group' lines into a map of user-agent ->
@@ -88,7 +90,7 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
   https://developers.google.com/search/reference/robots_txt#grouping-of-records.
 
   Both the map of user agents and each list of directives are sorted
-  by length (longest first).  This is to aid evaluating the rules
+  by length (longest first).  This is to aid evaluating the directives
   later."
   [lines]
   ;; Stateful loop goop :(.  This is a very stateful reduction.
@@ -98,11 +100,11 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
   ;; each of them.
   (loop [lines lines
          encountering-agents false
-         current-agents #{}
+         current-agents {}
          ;; Longest UAs first
          result (sorted-map-by longest-strings-first)]
     (let [line (first lines)
-          [type _] line]
+          type (:type line)]
       (cond
         (nil? line) result
 
@@ -112,8 +114,8 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
         (recur (rest lines)
                true
                (if encountering-agents
-                 (conj current-agents (second line))
-                 #{(second line)})
+                 (assoc current-agents (:value line) (:line-number line))
+                 {(:value line) (:line-number line)})
                result)
 
         ;; Stop encountering agents and place this directive into the set of
@@ -123,7 +125,10 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
                false
                current-agents
                (if (not-empty current-agents)
-                 (reduce #(update %1 %2 update-group-map line)
+                 ;; For each agent, create a map containing that agent's
+                 ;; directives and its line number.
+                 (reduce (fn [result [agent line-number]]
+                           (update result agent update-agent-value line line-number))
                          result
                          current-agents)
                  ;; no preceding UA -> discard
@@ -135,11 +140,16 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
   [content]
   (let [parsed (->> content
                     (str/split-lines)
-                    (map parse-line)
-                    (filter some?))
+                    (map-indexed parse-line)
+                    (filter some?)
+                    (map (fn [line]
+                           {:type (first line)
+                            :value (second line)
+                            :line-number (:line-number (meta line))})))
         {:keys [group sitemap]} (categorize-lines parsed)]
-    {:sitemap-urls (into [] (map second sitemap))
-     :agent-rules (by-user-agent group)}))
+    {:sitemap-urls sitemap
+     :agent-groups (by-user-agent group)
+     :raw-content content}))
 
 (defn- re-quote
   [s]
@@ -163,18 +173,26 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
 
 (def ^:private regex-memo (memoize regexify))
 
-(defn- rule-verdict
-  [[rule rule-path] test-path]
-  (if (re-find (regex-memo rule-path) test-path)
-    ;; return the type of the rule - :allow or :disallow
-    rule
-    ;; we have nothing to say
-    nil))
+(defn- directive-verdict
+  [[user-agent {:keys [directives line-number]}] test-path]
+  (let [matching-directive
+        (->> directives
+             (filter #(re-find (regex-memo (:value %)) test-path))
+             first)]
+    (if matching-directive
+      {:result (:type matching-directive)
+       :because {:directive matching-directive
+                 :user-agent {:value user-agent
+                              :line-number line-number}}}
+      ;; we have nothing to say
+      {:result :allow
+       :because nil})))
 
-(defn is-crawlable?
-  "Does the given parsed robots.txt permit the given URL to be crawled
-  by the given user-agent?"
-  [{:keys [agent-rules]} url user-agent]
+(defn query-crawlable
+  "Determines whether and explains why the given parsed robots.txt does
+  or does not permit the given URL to be crawled by the given
+  user-agent."
+  [{:keys [agent-groups]} url user-agent]
   (let [path (str (assoc (uri/parse url)
                          ;; Drop anything in the URI before the path.  We do it
                          ;; this way to take advantage of toString on uri/URI.
@@ -184,16 +202,15 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
                          :host nil
                          :port nil))
         user-agent (str/lower-case user-agent)
-        rules (or (some->> agent-rules
-                           (filter #(str/includes? user-agent (key %)))
-                           (first)
-                           (val))
-                  ;; Special case: wildcard user agent. Only this exact string
-                  ;; is a valid wildcard - UA wildcards are not as general as
-                  ;; wildcards in allow/disallow paths.
-                  (get agent-rules "*"))]
-    (case (some #(rule-verdict % path) rules)
-      :allow true
-      :disallow false
-      ;; robots.txt had nothing to say about this URL - crawl away
-      nil true)))
+        agent-rule (or (first (filter #(str/includes? user-agent (key %)) agent-groups))
+                       ;; Special case: wildcard user agent. Only this exact string
+                       ;; is a valid wildcard - UA wildcards are not as general as
+                       ;; wildcards in allow/disallow paths.
+                       (first (filter #(= "*" (key %)) agent-groups)))]
+    (assoc (directive-verdict agent-rule path) :query {:url url :user-agent user-agent})))
+
+(defn is-crawlable?
+  "Does the given parsed robots.txt permit the given URL to be crawled
+  by the given user-agent?"
+  [robots-txt url user-agent]
+  (= (:result (query-crawlable robots-txt url user-agent)) :allow))

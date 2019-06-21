@@ -1,10 +1,9 @@
 (ns clj-robots-parser.core-test
   (:require #?(:clj [clojure.test :refer [deftest is testing are]]
                :cljs [cljs.test :refer-macros [deftest is testing are]])
-            [clj-robots-parser.core :refer [parse is-crawlable?]]))
+            [clj-robots-parser.core :refer [parse is-crawlable? query-crawlable stringify-query-result]]))
 
-(def robots-simple "
-  sitemap: https://example.com/sitemap1
+(def robots-simple "sitemap: https://example.com/sitemap1
   allow : /no-user-agent-so-we-ignore
   user-Agent: *# how bout that we can comment here yee haw
   some garbo line that should be ignored
@@ -66,3 +65,30 @@
       false {:url "/Foobar" :ua "google salt bae"}
       false {:url "/Foobar" :ua "anything"}
       false {:url "/whatever" :ua "anything"})))
+
+(deftest test-stringify
+  (testing "unified match"
+    (let [robots (parse robots-simple)
+          result (query-crawlable robots "/Foo" "doesn't matter")
+          stringified (stringify-query-result robots result)]
+      (is (= "     2 |   allow : /no-user-agent-so-we-ignore
+---> 3 |   user-Agent: *# how bout that we can comment here yee haw
+     4 |   some garbo line that should be ignored
+---> 5 |   alloW: /Foo
+     6 |   Allow: /bar" stringified))))
+  (testing "split match"
+    (let [robots (parse robots-simple)
+          result (query-crawlable robots "/Foobar" "doesn't matter")
+          stringified (stringify-query-result robots result)]
+      (is (= "     2 |   allow : /no-user-agent-so-we-ignore
+---> 3 |   user-Agent: *# how bout that we can comment here yee haw
+     4 |   some garbo line that should be ignored
+       | . . .
+     7 | 
+---> 8 |   disallow: /Foobar
+     9 |   sitemap: https://example.com/sitemap2" stringified))))
+  (testing "no match"
+    (let [robots (parse robots-simple)
+          result (query-crawlable robots "/NotInTheRobotsTxt" "doesn't matter")
+          stringified (stringify-query-result robots result)]
+      (is (= "robots.txt does not mention it" stringified)))))

@@ -3,7 +3,8 @@
             [lambdaisland.uri :as uri]
             #?(:clj [instaparse.core :as insta :refer [defparser]]
                :cljs [instaparse.core :as insta :refer-macros [defparser]])
-            #?(:cljs [goog.string :as gstring])))
+            #?(:cljs [goog.string :as gstring])
+            #?(:cljs [goog.string.format])))
 
 
 ;; Adapted from https://developers.google.com/search/reference/robots_txt.
@@ -42,14 +43,14 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
 (defn- parse-line
   "Parses the given line, returning nil if it is not valid according to
   the grammar."
-  [line-number line]
+  [line-index line]
   (let [result (robots-txt-line line)]
     (when-not (insta/failure? result)
       (with-meta
         (insta/transform {:robotsline identity ; strips the :robotsline key
                           :pathvalue str
                           :agentvalue (comp str/trim str/lower-case)} result)
-        {:line-number line-number}))))
+        {:line-number (+ 1 line-index)}))))
 
 (defn- categorize-line
   [parsed-line]
@@ -214,3 +215,64 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
   by the given user-agent?"
   [robots-txt url user-agent]
   (= (:result (query-crawlable robots-txt url user-agent)) :allow))
+
+(defn- calculate-spans
+  [line-numbers]
+  (loop [spans []
+         current-span []
+         remaining-lines line-numbers]
+    (let [previous-line (last current-span)
+          current-line (first remaining-lines)]
+      (cond (nil? current-line) (conj spans current-span)
+
+            (nil? previous-line)
+            (recur spans [current-line] (rest remaining-lines))
+
+            (= current-line (+ previous-line 1))
+            (recur spans (conj current-span current-line) (rest remaining-lines))
+
+            :else (recur (conj spans current-span) [current-line] (rest remaining-lines))))))
+
+(defn- format-span
+  [highlight-lines line-contents format-width span]
+  (->> span
+       (map (fn [line]
+              (let [highlight-string (if (contains? highlight-lines line) "---> " "     ")
+                    format-string (str highlight-string "%" format-width "s | %s")
+                    format-fn #?(:clj format
+                                 :cljs gstring/format)]
+                (format-fn format-string line (get line-contents (- line 1))))))
+       (str/join "\n")))
+
+(defn- highlight-lines
+  [content line-numbers context]
+  (let [lines (str/split-lines content)
+        visible-line-numbers (->> line-numbers
+                                  sort
+                                  (map #(range (- % context) (+ % context 1)))
+                                  flatten
+                                  (filter #(and (> % 0) (<= % (count lines))))
+                                  distinct)
+        ;; Each span is a vector of contiguous lines.
+        spans (calculate-spans visible-line-numbers)
+        ;; Justify based on largest line number.
+        format-width (count (str (apply max visible-line-numbers)))]
+    (->> spans
+         (map (partial format-span line-numbers lines format-width))
+         ;; The line that joins each span; it has no line number so needs some
+         ;; extra space.
+         (str/join (str "\n" (str/join (repeat (+ 5 format-width) " ")) " | . . .\n")))))
+
+(defn stringify-query-result
+  "Creates a user-readable string explanation of a query-crawlable
+  result by providing contextual highlighting of the source robots.txt
+  that produced it."
+  [{:keys [raw-content]}
+   {:keys [because]} &
+   {:keys [context] :or {context 1}}]
+  (if because
+    (highlight-lines raw-content
+                     #{(get-in because [:user-agent :line-number])
+                       (get-in because [:directive :line-number])}
+                     context)
+    "robots.txt does not mention it"))

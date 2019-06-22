@@ -15,7 +15,7 @@
 
   :aliases {"test-all" ["do"
                         ["test"]
-                        ["doo" "nashorn" "test" "once"]]}
+                        ["doo" "node" "test" "once"]]}
 
   :doo {:build "test"}
 
@@ -23,6 +23,5 @@
                         :source-paths ["src" "test"]
                         :compiler {:output-to "target/testable.js"
                                    :output-dir "target"
-                                   :main clj-robots-parser.test-runner
-                                   ;; Needed for testing with nashorn - none is insufficient
-                                   :optimizations :whitespace}}]})
+                                   :target :nodejs
+                                   :main clj-robots-parser.test-runner}}]})

@@ -1,4 +1,4 @@
-(defproject isker/clj-robots-parser "0.1.2"
+(defproject isker/clj-robots-parser "0.1.3"
   :description "A Clojure(-script), Google-compliant robots.txt parser"
   :url "https://github.com/isker/clj-robots-parser"
   :license {:name         "MIT License"

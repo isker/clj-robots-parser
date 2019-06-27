@@ -14,8 +14,7 @@
   sitemap: https://example.com/sitemap2\r
   disAllow: not a path
   sItemAp: https://example.com/sitemap3 #no comments on URL lines
-  \t# comments on their own lines are just fine dawg
-  ")
+  \t# comments on their own lines are just fine dawg")
 
 (def multiple-user-agents "
   user-agent: google
@@ -26,8 +25,7 @@
   user-agent: msn
   user-agent: big
   allow: /
-  disallow: /secret-lair?cat=etcpwd
-  ")
+  disallow: /secret-lair?cat=etcpwd")
 
 (defn extract-groups
   [results]
@@ -66,6 +64,9 @@
       false {:url "/Foobar" :ua "anything"}
       false {:url "/whatever" :ua "anything"})))
 
+(def many-lined-robots
+  (str robots-simple (apply str (repeat 100 "\n")) "allow: /AtLongLast"))
+
 (deftest test-stringify
   (testing "unified match"
     (let [robots (parse robots-simple)
@@ -91,4 +92,14 @@
     (let [robots (parse robots-simple)
           result (query-crawlable robots "/NotInTheRobotsTxt" "doesn't matter")
           stringified (stringify-query-result robots result)]
-      (is (= "robots.txt does not mention it" stringified)))))
+      (is (= "robots.txt does not mention it" stringified))))
+  (testing "left margin is justified based on widest line number"
+    (let [robots (parse many-lined-robots)
+          result (query-crawlable robots "/AtLongLast" "doesn't matter")
+          stringified (stringify-query-result robots result)]
+      (is (= "       2 |   allow : /no-user-agent-so-we-ignore
+--->   3 |   user-Agent: *# how bout that we can comment here yee haw
+       4 |   some garbo line that should be ignored
+         | . . .
+     111 | 
+---> 112 | allow: /AtLongLast" stringified)))))

@@ -238,7 +238,7 @@ agentvalue   = #'[^\\x00-\\x1F\\x7F\r\n\t#]+'
   (->> span
        (map (fn [line]
               (let [highlight-string (if (contains? highlight-lines line) "---> " "     ")
-                    format-string (str highlight-string "%" format-width "s | %s")
+                    format-string (str highlight-string "%" format-width "d | %s")
                     format-fn #?(:clj format
                                  :cljs gstring/format)]
                 (format-fn format-string line (get line-contents (- line 1))))))
